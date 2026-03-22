@@ -31,43 +31,6 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
-function drawMonth(ctx, x, y, month, highlighted, color, scale = 1) {
-  const start = month.startOf('month');
-  const daysInMonth = month.daysInMonth();
-  const startDay = start.day();
-
-  const cell = 40 * scale;
-
-  ctx.fillStyle = '#fff';
-  ctx.font = `${28 * scale}px Sans`;
-  ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
-
-  let col = startDay;
-  let row = 0;
-
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dx = x + col * cell;
-    const dy = y + row * cell;
-
-    const isActive = highlighted.includes(d);
-
-    ctx.beginPath();
-    ctx.arc(dx, dy, 14 * scale, 0, Math.PI * 2);
-    ctx.fillStyle = isActive ? color : '#333';
-    ctx.fill();
-
-    ctx.fillStyle = '#fff';
-    ctx.font = `${14 * scale}px Sans`;
-    ctx.fillText(d.toString(), dx - (6 * scale), dy + (5 * scale));
-
-    col++;
-    if (col > 6) {
-      col = 0;
-      row++;
-    }
-  }
-}
-
 app.post('/calendar', (req, res) => {
   const { dates = [], color = '#ff3b30', device = 'default' } = req.body;
 
@@ -195,7 +158,7 @@ app.post('/calendar', (req, res) => {
   let bottomY = gridStartY + 2 * 240;
 
   if (next) {
-    const diff = next.diff(dayjs(), 'day');
+    const diff = next.diff(dayjs(), 'day') + 1;
 
     const textY = bottomY + 80;
 
@@ -203,7 +166,7 @@ app.post('/calendar', (req, res) => {
 
     ctx.fillStyle = '#aaa';
     ctx.font = '28px Sans';
-    ctx.fillText('NEXT EVENT', centerX, textY);
+    ctx.fillText('NEXT EVENT IN:', centerX, textY);
 
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
@@ -212,24 +175,28 @@ app.post('/calendar', (req, res) => {
     bottomY = textY + 80;
   }
 
-  // ===== BORDER AROUND CONTENT =====
-  const borderPadding = 30;
+   // ===== BORDER AROUND CONTENT (UPDATED) =====
+   const borderPadding = 40; // inner spacing
 
-  const contentTop = contentStartY;
-  const contentBottom = bottomY;
+   const contentTop = contentStartY;
+   const contentBottom = bottomY;
 
-  const borderX = width * 0.08;
-  const borderWidth = width * 0.84;
+   // make content narrower (centered)
+   const contentWidth = width * 0.72;   // 👈 was ~0.84
+   const borderX = (width - contentWidth) / 2;
 
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 4;
+   ctx.strokeStyle = '#fff';
+   ctx.lineWidth = 8; // 👈 thicker border
 
-  ctx.strokeRect(
-    borderX,
-    contentTop - borderPadding,
-    borderWidth,
-    (contentBottom - contentTop) + borderPadding * 2
-  );
+   ctx.beginPath();
+   ctx.roundRect(
+   borderX,
+   contentTop - borderPadding,
+   contentWidth,
+   (contentBottom - contentTop) + borderPadding * 2,
+   40 // corner radius
+ );
+ ctx.stroke();
 
   res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
