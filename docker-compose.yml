@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  api:
+    build: ./api
+    container_name: calendar-api
+    ports:
+      - "23000:3000"
+
+  web:
+    build: ./web
+    container_name: calendar-web
+    ports:
+      - "28080:80"
+    depends_on:
+      - api
