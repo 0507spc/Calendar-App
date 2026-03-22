@@ -139,10 +139,3 @@ Contributions are welcome. Open a PR with a clear description of the change. Sma
 This project currently has no license file. Add a LICENSE if you intend to open source it.
 
 ---
-
-If you'd like, I can also:
-
-- Add a Vite proxy config in `web/vite.config.js` and update `web/src/App.jsx` to use a consistent API URL during dev.
-- Add an npm `start`/`dev` script to the `api/package.json` for convenience.
-
-Tell me which of those you'd like and I'll make the changes.
