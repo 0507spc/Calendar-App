@@ -79,17 +79,15 @@ app.post('/calendar', (req, res) => {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, width, height);
 
-  // white border
-  const padding = 40;
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(padding, padding, width - padding * 2, height - padding * 2);
-
   const grouped = groupDates(dates);
   const now = dayjs();
   const centerX = width / 2;
 
-  // ===== DRAW MONTH FUNCTION (WITH SCALE) =====
+  // ===== SAFE AREAS (iphone style) =====
+  const safeTop = height * 0.12;
+  const safeBottom = height * 0.12;
+
+  // ===== DRAW MONTH FUNCTION =====
   function drawMonth(ctx, x, y, month, highlighted, color, scale = 1) {
     const start = month.startOf('month');
     const daysInMonth = month.daysInMonth();
@@ -128,12 +126,30 @@ app.post('/calendar', (req, res) => {
     }
   }
 
-  // ===== LARGE CURRENT MONTH =====
+  // ===== LAYOUT SIZES =====
   const largeScale = 1.4;
-  const largeWidth = 7 * 40 * largeScale;
+  const smallScale = 0.8;
 
+  const largeHeight = 40 * largeScale * 6 + 60;
+  const smallBlockHeight = 240 * 2;
+  const nextHeight = 120;
+
+  const totalContentHeight =
+    largeHeight +
+    40 + // gap
+    smallBlockHeight +
+    40 + // gap
+    nextHeight;
+
+  // ===== CENTER CONTENT VERTICALLY =====
+  const contentStartY =
+    safeTop +
+    (height - safeTop - safeBottom - totalContentHeight) / 2;
+
+  // ===== LARGE MONTH =====
+  const largeWidth = 7 * 40 * largeScale;
   const largeX = centerX - largeWidth / 2;
-  const largeY = 220;
+  const largeY = contentStartY + 60;
 
   drawMonth(
     ctx,
@@ -145,14 +161,13 @@ app.post('/calendar', (req, res) => {
     largeScale
   );
 
-  // ===== SMALL MONTHS (2x2 GRID) =====
-  const smallScale = 0.8;
+  // ===== SMALL MONTH GRID =====
   const smallWidth = 7 * 40 * smallScale;
   const gap = 40;
 
   const gridWidth = smallWidth * 2 + gap;
   const gridStartX = centerX - gridWidth / 2;
-  const gridStartY = largeY + 320;
+  const gridStartY = largeY + largeHeight;
 
   for (let i = 1; i <= 4; i++) {
     const m = now.add(i, 'month');
@@ -177,10 +192,12 @@ app.post('/calendar', (req, res) => {
 
   // ===== NEXT EVENT =====
   const next = getNextDate(dates);
+  let bottomY = gridStartY + 2 * 240;
 
   if (next) {
     const diff = next.diff(dayjs(), 'day');
-    const textY = gridStartY + 2 * 240 + 140;
+
+    const textY = bottomY + 80;
 
     ctx.textAlign = 'center';
 
@@ -191,7 +208,28 @@ app.post('/calendar', (req, res) => {
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
     ctx.fillText(`${diff} DAYS`, centerX, textY + 60);
+
+    bottomY = textY + 80;
   }
+
+  // ===== BORDER AROUND CONTENT =====
+  const borderPadding = 30;
+
+  const contentTop = contentStartY;
+  const contentBottom = bottomY;
+
+  const borderX = width * 0.08;
+  const borderWidth = width * 0.84;
+
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 4;
+
+  ctx.strokeRect(
+    borderX,
+    contentTop - borderPadding,
+    borderWidth,
+    (contentBottom - contentTop) + borderPadding * 2
+  );
 
   res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
