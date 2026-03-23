@@ -136,6 +136,6 @@ Contributions are welcome. Open a PR with a clear description of the change. Sma
 
 ## License
 
-This project currently has no license file. Add a LICENSE if you intend to open source it.
+This project currently has no license file.
 
 ---

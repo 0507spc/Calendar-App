@@ -2,12 +2,14 @@ version: "3.9"
 
 services:
   api:
+    image: calendar-api
     build: ./api
     container_name: calendar-api
     ports:
       - "23000:3000"
 
   web:
+    image: calendar-web
     build: ./web
     container_name: calendar-web
     ports:
