@@ -51,10 +51,14 @@ app.post('/calendar', (req, res) => {
   const safeBottom = height * 0.12;
 
   // ===== DRAW MONTH FUNCTION =====
-  function drawMonth(ctx, x, y, month, highlighted, color, scale = 1) {
+    function drawMonth(ctx, x, y, month, highlighted, color, scale = 1) {
     const start = month.startOf('month');
     const daysInMonth = month.daysInMonth();
     const startDay = start.day();
+
+    const today = dayjs();
+
+    const isCurrentMonth = month.isSame(today, 'month');
 
     const cell = 40 * scale;
 
@@ -67,27 +71,47 @@ app.post('/calendar', (req, res) => {
     let row = 0;
 
     for (let d = 1; d <= daysInMonth; d++) {
-      const dx = x + col * cell;
-      const dy = y + row * cell;
+        const dx = x + col * cell;
+        const dy = y + row * cell;
 
-      const isActive = highlighted.includes(d);
+        const isHighlighted = highlighted.includes(d);
 
-      ctx.beginPath();
-      ctx.arc(dx, dy, 14 * scale, 0, Math.PI * 2);
-      ctx.fillStyle = isActive ? color : '#333';
-      ctx.fill();
+        // 👇 determine if past date
+        const isPast =
+        isCurrentMonth && d < today.date();
 
-      ctx.fillStyle = '#fff';
-      ctx.font = `${14 * scale}px Sans`;
-      ctx.fillText(d.toString(), dx - (6 * scale), dy + (5 * scale));
+        // 👇 circle color
+        let fillColor = '#333';
 
-      col++;
-      if (col > 6) {
+        if (isHighlighted) {
+        fillColor = color;
+        } else if (isPast) {
+        fillColor = '#1a1a1a'; // darker grey for past
+        }
+
+        if (isCurrentMonth && d === today.date()) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(dx, dy, 14 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        // 👇 text color
+        ctx.fillStyle = isPast && !isHighlighted ? '#666' : '#fff';
+        ctx.font = `${14 * scale}px Sans`;
+        ctx.fillText(d.toString(), dx - (6 * scale), dy + (5 * scale));
+
+        col++;
+        if (col > 6) {
         col = 0;
         row++;
-      }
+        }
     }
-  }
+    }
 
   // ===== LAYOUT SIZES =====
   const largeScale = 1.4;
