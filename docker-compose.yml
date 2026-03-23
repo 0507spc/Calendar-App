@@ -1,13 +1,13 @@
 services:
   api:
-    image: calendar-api
+    image: nexus.server.cranie.com/docker/calendar-app-api:${TAG}
     build: ./api
     container_name: calendar-api
     ports:
       - "23000:3000"
 
   web:
-    image: calendar-web
+    image: nexus.server.cranie.com/docker/calendar-app-web:${TAG}
     build: ./web
     container_name: calendar-web
     ports:
