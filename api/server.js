@@ -7,12 +7,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ===== DEVICE SIZES =====
 const DEVICES = {
   iphone16pm: { width: 1290, height: 2796 },
   iphone15: { width: 1179, height: 2556 },
   default: { width: 1080, height: 1920 }
 };
 
+// ===== HELPERS =====
 function groupDates(dates) {
   const map = {};
   dates.forEach(d => {
@@ -31,10 +33,119 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
+// ===== DRAW MONTH =====
+function drawMonth(
+  ctx,
+  x,
+  y,
+  month,
+  highlighted,
+  color,
+  scale = 1,
+  options = {}
+) {
+  const {
+    showHighlighted = true,
+    showHeaders = false
+  } = options;
+
+  const start = month.startOf('month');
+  const daysInMonth = month.daysInMonth();
+
+  const today = dayjs();
+
+  // Monday start
+  const startDay = (start.day() + 6) % 7;
+
+  const cell = 40 * scale;
+
+  // Month title
+  ctx.fillStyle = '#fff';
+  ctx.font = `${28 * scale}px Sans`;
+  ctx.textAlign = 'left';
+  ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
+
+  // Headers
+  if (showHeaders) {
+    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    ctx.font = `${12 * scale}px Sans`;
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+
+    for (let i = 0; i < 7; i++) {
+      ctx.fillText(days[i], x + i * cell + cell / 2, y - 2);
+    }
+  }
+
+  let col = startDay;
+  let row = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dx = x + col * cell;
+    const dy = y + row * cell;
+
+    const isHighlighted = highlighted.includes(d);
+
+    const thisDate = month.date(d);
+    const isPast = thisDate.isBefore(today, 'day');
+
+    let fillColor = '#333';
+    let textColor = '#fff';
+
+    if (showHighlighted && isHighlighted) {
+      fillColor = isPast ? '#555' : color;
+    } else if (isPast) {
+      fillColor = '#1a1a1a';
+      textColor = '#666';
+    }
+
+    // Circle
+    ctx.beginPath();
+    ctx.arc(
+      dx + cell / 2,
+      dy + cell / 2,
+      14 * scale,
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    // Text (centered)
+    ctx.fillStyle = textColor;
+    ctx.font = `${14 * scale}px Sans`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.fillText(
+      d.toString(),
+      dx + cell / 2,
+      dy + cell / 2
+    );
+
+    col++;
+    if (col > 6) {
+      col = 0;
+      row++;
+    }
+  }
+}
+
+// ===== API =====
 app.post('/calendar', (req, res) => {
-  const { dates = [], color = '#ff3b30', device = 'default' } = req.body;
+  const {
+    dates = [],
+    color = '#ff3b30',
+    device = 'default',
+
+    // NEW OPTIONS
+    showHeaders = false,
+    widgetMode = false,
+    showSmallMonthEvents = false
+  } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
+
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
@@ -46,89 +157,21 @@ app.post('/calendar', (req, res) => {
   const now = dayjs();
   const centerX = width / 2;
 
-  // ===== SAFE AREAS (iphone style) =====
-  const safeTop = height * 0.12;
-  const safeBottom = height * 0.12;
+  // ===== SAFE AREAS =====
+  const safeTop = height * (widgetMode ? 0.05 : 0.12);
+  const safeBottom = height * (widgetMode ? 0.05 : 0.12);
 
-  // ===== DRAW MONTH FUNCTION =====
-    function drawMonth(ctx, x, y, month, highlighted, color, scale = 1) {
-    const start = month.startOf('month');
-    const daysInMonth = month.daysInMonth();
-    const startDay = start.day();
-
-    const today = dayjs();
-
-    const isCurrentMonth = month.isSame(today, 'month');
-
-    const cell = 40 * scale;
-
-    ctx.fillStyle = '#fff';
-    ctx.font = `${28 * scale}px Sans`;
-    ctx.textAlign = 'left';
-    ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
-
-    let col = startDay;
-    let row = 0;
-
-    for (let d = 1; d <= daysInMonth; d++) {
-        const dx = x + col * cell;
-        const dy = y + row * cell;
-
-        const isHighlighted = highlighted.includes(d);
-
-        // 👇 determine if past date
-        const isPast =
-        isCurrentMonth && d < today.date();
-
-        // 👇 circle color
-        let fillColor = '#333';
-
-        if (isHighlighted) {
-        fillColor = color;
-        } else if (isPast) {
-        fillColor = '#1a1a1a'; // darker grey for past
-        }
-
-        if (isCurrentMonth && d === today.date()) {
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-        }
-
-        ctx.beginPath();
-        ctx.arc(dx, dy, 14 * scale, 0, Math.PI * 2);
-        ctx.fillStyle = fillColor;
-        ctx.fill();
-
-        // 👇 text color
-        ctx.fillStyle = isPast && !isHighlighted ? '#666' : '#fff';
-        ctx.font = `${14 * scale}px Sans`;
-        ctx.fillText(d.toString(), dx - (6 * scale), dy + (5 * scale));
-
-        col++;
-        if (col > 6) {
-        col = 0;
-        row++;
-        }
-    }
-    }
-
-  // ===== LAYOUT SIZES =====
-  const largeScale = 1.4;
-  const smallScale = 0.8;
+  // ===== SCALES =====
+  const largeScale = widgetMode ? 1.1 : 1.4;
+  const smallScale = widgetMode ? 0.7 : 0.8;
 
   const largeHeight = 40 * largeScale * 6 + 60;
-  const smallBlockHeight = 240 * 2;
-  const nextHeight = 120;
+  const smallBlockHeight = 240 * 2 * smallScale;
+  const nextHeight = widgetMode ? 80 : 120;
 
   const totalContentHeight =
-    largeHeight +
-    40 + // gap
-    smallBlockHeight +
-    40 + // gap
-    nextHeight;
+    largeHeight + 40 + smallBlockHeight + 40 + nextHeight;
 
-  // ===== CENTER CONTENT VERTICALLY =====
   const contentStartY =
     safeTop +
     (height - safeTop - safeBottom - totalContentHeight) / 2;
@@ -145,10 +188,11 @@ app.post('/calendar', (req, res) => {
     now,
     grouped[now.format('YYYY-MM')] || [],
     color,
-    largeScale
+    largeScale,
+    { showHeaders }
   );
 
-  // ===== SMALL MONTH GRID =====
+  // ===== SMALL MONTHS =====
   const smallWidth = 7 * 40 * smallScale;
   const gap = 40;
 
@@ -164,7 +208,7 @@ app.post('/calendar', (req, res) => {
     const row = Math.floor((i - 1) / 2);
 
     const x = gridStartX + col * (smallWidth + gap);
-    const y = gridStartY + row * 240;
+    const y = gridStartY + row * 240 * smallScale;
 
     drawMonth(
       ctx,
@@ -173,57 +217,63 @@ app.post('/calendar', (req, res) => {
       m,
       grouped[key] || [],
       color,
-      smallScale
+      smallScale,
+      {
+        showHighlighted: showSmallMonthEvents,
+        showHeaders
+      }
     );
   }
 
   // ===== NEXT EVENT =====
   const next = getNextDate(dates);
-  let bottomY = gridStartY + 2 * 240;
+  let bottomY = gridStartY + 2 * 240 * smallScale;
 
   if (next) {
-    const diff = next.diff(dayjs(), 'day') + 1;
-
-    const textY = bottomY + 80;
+    const diff = next.diff(dayjs(), 'day');
+    const textY = bottomY + (widgetMode ? 40 : 80);
 
     ctx.textAlign = 'center';
 
-    ctx.fillStyle = '#aaa';
-    ctx.font = '28px Sans';
-    ctx.fillText('NEXT EVENT IN:', centerX, textY);
+    if (!widgetMode) {
+      ctx.fillStyle = '#aaa';
+      ctx.font = '28px Sans';
+      ctx.fillText('NEXT EVENT', centerX, textY);
+    }
 
     ctx.fillStyle = '#fff';
-    ctx.font = '48px Sans';
-    ctx.fillText(`${diff} DAYS`, centerX, textY + 60);
+    ctx.font = widgetMode ? '36px Sans' : '48px Sans';
+    ctx.fillText(`${diff} DAYS`, centerX, textY + 50);
 
     bottomY = textY + 80;
   }
 
-   // ===== BORDER AROUND CONTENT (UPDATED) =====
-   const borderPadding = 40; // inner spacing
+  // ===== BORDER =====
+  const borderPadding = 40;
 
-   const contentTop = contentStartY;
-   const contentBottom = bottomY;
+  const contentTop = contentStartY;
+  const contentBottom = bottomY;
 
-   // make content narrower (centered)
-   const contentWidth = width * 0.72;   // 👈 was ~0.84
-   const borderX = (width - contentWidth) / 2;
+  const contentWidth = width * (widgetMode ? 0.9 : 0.72);
+  const borderX = (width - contentWidth) / 2;
 
-   ctx.strokeStyle = '#fff';
-   ctx.lineWidth = 8; // 👈 thicker border
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = widgetMode ? 4 : 8;
 
-   ctx.beginPath();
-   ctx.roundRect(
-   borderX,
-   contentTop - borderPadding,
-   contentWidth,
-   (contentBottom - contentTop) + borderPadding * 2,
-   40 // corner radius
- );
- ctx.stroke();
+  ctx.beginPath();
+  ctx.roundRect(
+    borderX,
+    contentTop - borderPadding,
+    contentWidth,
+    (contentBottom - contentTop) + borderPadding * 2,
+    40
+  );
+  ctx.stroke();
 
   res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
 });
 
-app.listen(3000, () => console.log('API running on http://localhost:3000'));
+app.listen(3000, () =>
+  console.log('API running on http://localhost:3000')
+);
