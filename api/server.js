@@ -92,8 +92,16 @@ function drawMonth(
     let fillColor = '#333';
     let textColor = '#fff';
 
+
     if (showHighlighted && isHighlighted) {
-      fillColor = isPast ? '#555' : color;
+  
+}
+
+    // •	#8b1e1e = subtle
+	  // •	#661111 = more faded
+	  // •	#aa2a2a = slightly stronger
+    if (showHighlighted && isHighlighted) {
+      fillColor = isPast ? '#8b1e1e' : color; // 👈 dim red for past events
     } else if (isPast) {
       fillColor = '#1a1a1a';
       textColor = '#666';
@@ -247,15 +255,20 @@ app.post('/calendar', (req, res) => {
 
     bottomY = textY + 80;
   }
-
+  
   // ===== BORDER =====
   const borderPadding = 40;
-
+  const innerPadding = 20;
+  
   const contentTop = contentStartY;
   const contentBottom = bottomY;
 
-  const contentWidth = width * (widgetMode ? 0.9 : 0.72);
+  // const contentWidth = width * (widgetMode ? 0.9 : 0.72);
+  const contentWidth = width * (widgetMode ? 0.85 : 0.65); // 👈 narrower
   const borderX = (width - contentWidth) / 2;
+  const contentInnerX = borderX + innerPadding;
+
+  const largeX = centerX - largeWidth / 2 + innerPadding / 2;
 
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = widgetMode ? 4 : 8;
