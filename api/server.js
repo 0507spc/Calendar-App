@@ -156,7 +156,10 @@ app.post('/calendar', (req, res) => {
 
     glowCurrentMonth = true,
     glowSmallMonths = false,
-    glowNextEvent = true
+    glowNextEvent = true,
+
+    heightOffset = 0,
+    widthOffset = 0
   } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
@@ -169,7 +172,8 @@ app.post('/calendar', (req, res) => {
 
   const grouped = groupDates(dates);
   const now = dayjs();
-  const centerX = width / 2;
+
+  const centerX = width / 2 + widthOffset;
 
   const safeTop = height * (widgetMode ? 0.05 : 0.12);
   const safeBottom = height * (widgetMode ? 0.05 : 0.12);
@@ -184,11 +188,13 @@ app.post('/calendar', (req, res) => {
   const totalContentHeight =
     largeHeight + 40 + smallBlockHeight + 40 + nextHeight;
 
-  const contentStartY =
+  const baseY =
     safeTop +
     (height - safeTop - safeBottom - totalContentHeight) / 2;
 
-  // LARGE
+  const contentStartY = baseY + height * 0.05 + heightOffset;
+
+  // ===== LARGE =====
   const largeWidth = 7 * 40 * largeScale;
   const largeX = centerX - largeWidth / 2;
   const largeY = contentStartY + 60;
@@ -204,7 +210,7 @@ app.post('/calendar', (req, res) => {
     { showHeaders, glow: glowCurrentMonth }
   );
 
-  // SMALL
+  // ===== SMALL =====
   const smallWidth = 7 * 40 * smallScale;
   const gap = 40;
 
@@ -239,14 +245,12 @@ app.post('/calendar', (req, res) => {
     );
   }
 
-  // NEXT EVENT
+  // ===== NEXT EVENT =====
   const next = getNextDate(dates);
   let bottomY = gridStartY + 2 * 240 * smallScale;
 
   if (next) {
     let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
-
-    // fix "0 days"
     if (diff === 0) diff = 1;
 
     const textY = bottomY + (widgetMode ? 40 : 80);
@@ -273,10 +277,10 @@ app.post('/calendar', (req, res) => {
     bottomY = textY + 80;
   }
 
-  // BORDER
+  // ===== BORDER =====
   const borderPadding = 40;
   const contentWidth = width * (widgetMode ? 0.85 : 0.65);
-  const borderX = (width - contentWidth) / 2;
+  const borderX = (width - contentWidth) / 2 + widthOffset;
 
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = widgetMode ? 4 : 8;
