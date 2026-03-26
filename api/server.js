@@ -244,7 +244,7 @@ app.post('/calendar', (req, res) => {
   let bottomY = gridStartY + 2 * 240 * smallScale;
 
   if (next) {
-    const diff = next.diff(dayjs(), 'day');
+    const diff = next.diff(dayjs(), 'day') + 1;
     const textY = bottomY + (widgetMode ? 40 : 80);
 
     ctx.textAlign = 'center';
