@@ -171,12 +171,30 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
 
 // ===== API =====
 app.get('/devices', (req, res) => {
+  const formatLabel = (key, width, height) => {
+    const pretty = key
+      // split words/numbers
+      .replace(/([a-z])([0-9])/i, '$1 $2')
+      // variants
+      .replace(/pm/g, ' Pro Max')
+      .replace(/pro/g, ' Pro')
+      .replace(/plus/g, ' Plus')
+      .replace(/mini/g, ' Mini')
+      .replace(/^Iphone/, 'iPhone')
+      .replace(/^Pixel/, 'Pixel')
+      .replace(/^Galaxys/, 'Galaxy S')
+      // capitalise words
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+    return `${pretty} (${width}x${height})`;
+  };
+
   res.json(
     Object.entries(DEVICES).map(([key, value]) => ({
       id: key,
       width: value.width,
       height: value.height,
-      label: `${key} (${value.width}x${value.height})`
+      label: formatLabel(key, value.width, value.height)
     }))
   );
 });
