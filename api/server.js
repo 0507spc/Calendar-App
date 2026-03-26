@@ -20,7 +20,6 @@ function formatLabel(key, w, h) {
     .replace(/([a-z])([0-9])/i, '$1 $2')
     .replace(/pm/g, ' Pro Max')
     .replace(/pro/g, ' Pro')
-    .replace(/plus/g, ' Plus')
     .replace(/\b\w/g, c => c.toUpperCase()) +
     ` (${w}x${h})`;
 }
@@ -31,13 +30,13 @@ function groupDates(dates) {
 
   dates.forEach(d => {
     const day = dayjs(d);
-    const dayKey = day.format('YYYY-MM-DD');
-    const monthKey = day.format('YYYY-MM');
+    const dKey = day.format('YYYY-MM-DD');
+    const mKey = day.format('YYYY-MM');
 
-    perDay[dayKey] = (perDay[dayKey] || 0) + 1;
+    perDay[dKey] = (perDay[dKey] || 0) + 1;
 
-    if (!perMonth[monthKey]) perMonth[monthKey] = [];
-    perMonth[monthKey].push(day.date());
+    if (!perMonth[mKey]) perMonth[mKey] = [];
+    perMonth[mKey].push(day.date());
   });
 
   return { perDay, perMonth };
@@ -50,8 +49,8 @@ function dimColor(hex, factor = 0.4) {
   return `rgb(${r * factor},${g * factor},${b * factor})`;
 }
 
-function intensityColor(hex, intensity) {
-  return dimColor(hex, 0.3 + intensity * 0.7);
+function intensityColor(hex, i) {
+  return dimColor(hex, 0.3 + i * 0.7);
 }
 
 function getNextDate(dates) {
@@ -60,7 +59,7 @@ function getNextDate(dates) {
     .sort((a,b)=>a-b)[0];
 }
 
-// ===== DRAW MONTH =====
+// ===== CALENDAR DRAW =====
 function drawMonth(ctx, x, y, month, highlighted, color, scale) {
   const startDay = (month.startOf('month').day() + 6) % 7;
   const days = month.daysInMonth();
@@ -75,16 +74,18 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale) {
     if (highlighted.includes(d)) {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(dx+cell/2, dy+cell/2, 14*scale, 0, Math.PI*2);
+      ctx.arc(dx + cell/2, dy + cell/2, 14 * scale, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(d, dx+cell/2, dy+cell/2);
+    ctx.font = `${14 * scale}px Sans`;
+    ctx.fillText(d, dx + cell/2, dy + cell/2);
 
-    col++; if (col > 6) { col = 0; row++; }
+    col++;
+    if (col > 6) { col = 0; row++; }
   }
 }
 
@@ -92,82 +93,90 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale) {
 function drawHeatmap(ctx, x, y, months, perDay, color, scale, density) {
   const cell = 12 * scale;
   const gap = 4 * scale;
+
   let offsetX = x;
 
   months.forEach(month => {
-    let col = 0, row = (month.startOf('month').day()+6)%7;
+    let col = 0;
+    let row = (month.startOf('month').day() + 6) % 7;
 
     for (let d = 1; d <= month.daysInMonth(); d++) {
       const key = month.date(d).format('YYYY-MM-DD');
       const count = perDay[key] || 0;
 
       let fill = '#1a1a1a';
-      if (count) {
+
+      if (count > 0) {
         fill = density
-          ? intensityColor(color, Math.min(count/5,1))
+          ? intensityColor(color, Math.min(count / 5, 1))
           : color;
       }
 
       ctx.fillStyle = fill;
       ctx.fillRect(
-        offsetX + col*(cell+gap),
-        y + row*(cell+gap),
-        cell, cell
+        offsetX + col * (cell + gap),
+        y + row * (cell + gap),
+        cell,
+        cell
       );
 
-      col++; if (col > 6) { col = 0; row++; }
+      col++;
+      if (col > 6) { col = 0; row++; }
     }
 
-    offsetX += 8*(cell+gap) + 20;
+    offsetX += 8 * (cell + gap) + 20;
   });
 }
 
-// ===== API =====
-app.get('/devices', (req,res)=>{
-  res.json(Object.entries(DEVICES).map(([k,v])=>({
-    id:k,
-    width:v.width,
-    height:v.height,
-    label:formatLabel(k,v.width,v.height)
+// ===== ROUTES =====
+app.get('/devices', (req, res) => {
+  res.json(Object.entries(DEVICES).map(([k,v]) => ({
+    id: k,
+    width: v.width,
+    height: v.height,
+    label: formatLabel(k, v.width, v.height)
   })));
 });
 
-app.post('/calendar', (req,res)=>{
+app.post('/calendar', (req, res) => {
   const {
-    dates=[],
-    color='#ff3b30',
-    device='default',
-    viewMode='calendar',
-    heatmapDensity=false
+    dates = [],
+    color = '#ff3b30',
+    device = 'default',
+    viewMode = 'calendar',
+    heatmapDensity = false
   } = req.body;
 
-  const {width,height} = DEVICES[device] || DEVICES.default;
+  const { width, height } = DEVICES[device] || DEVICES.default;
 
-  const canvas = createCanvas(width,height);
+  const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle='#000';
-  ctx.fillRect(0,0,width,height);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
 
-  const {perDay, perMonth} = groupDates(dates);
+  const { perDay, perMonth } = groupDates(dates);
   const now = dayjs();
 
   if (viewMode === 'heatmap') {
+    const months = [0,1,2,3,4].map(i => now.add(i, 'month'));
+
     drawHeatmap(
       ctx,
-      width*0.1,
-      height*0.3,
-      [0,1,2,3,4].map(i=>now.add(i,'month')),
+      width * 0.1,
+      height * 0.3,
+      months,
       perDay,
       color,
       2,
       heatmapDensity
     );
+
   } else {
     drawMonth(
       ctx,
-      width/2 - 200,
-      height*0.25,
+      width / 2 - 200,
+      height * 0.25,
       now,
       perMonth[now.format('YYYY-MM')] || [],
       color,
@@ -176,16 +185,19 @@ app.post('/calendar', (req,res)=>{
   }
 
   const next = getNextDate(dates);
+
   if (next) {
-    let diff = next.diff(dayjs(),'day') || 1;
-    ctx.fillStyle='#fff';
-    ctx.font='48px Sans';
-    ctx.textAlign='center';
-    ctx.fillText(`${diff} DAYS`, width/2, height*0.8);
+    let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
+    if (diff === 0) diff = 1;
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '48px Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${diff} DAYS`, width / 2, height * 0.85);
   }
 
-  res.setHeader('Content-Type','image/png');
+  res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
 });
 
-app.listen(3000,()=>console.log('API running'));
+app.listen(3000, () => console.log('API running on 3000'));
