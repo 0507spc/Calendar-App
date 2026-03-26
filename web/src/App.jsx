@@ -6,6 +6,8 @@ export default function App() {
   const [dates, setDates] = useState("2026-03-26\n2026-03-27");
   const [image, setImage] = useState(null);
 
+  const [devices, setDevices] = useState([]);
+
   const [options, setOptions] = useState({
     color: "#ff3b30",
     device: "iphone16pm",
@@ -43,6 +45,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    fetch("https://calendar-api.server.cranie.com/devices")
+      .then(res => res.json())
+      .then(data => setDevices(data));
+    
     generate();
   }, []);
 
@@ -78,9 +84,11 @@ export default function App() {
             value={options.device}
             onChange={e => update("device", e.target.value)}
           >
-            <option value="iphone16pm">iPhone 16 Pro Max</option>
-            <option value="iphone15">iPhone 15</option>
-            <option value="default">Default</option>
+            {devices.map(d => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+              </option>
+            ))}
           </select>
 
           <label>
