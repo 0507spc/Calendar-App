@@ -2,140 +2,201 @@ const express = require('express');
 const { createCanvas } = require('canvas');
 const dayjs = require('dayjs');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ===== LOAD DEVICES =====
-const DEVICES = JSON.parse(
-  fs.readFileSync(path.join(__dirname, 'devices.json'), 'utf8')
-);
+// ===== DEVICE SIZES =====
+const DEVICES = {
+  // ===== iPhone 16 lineup =====
+  iphone16: { width: 1179, height: 2556 },
+  iphone16plus: { width: 1290, height: 2796 },
+  iphone16pro: { width: 1206, height: 2622 },
+  iphone16pm: { width: 1320, height: 2868 },
+
+  // ===== iPhone 15 lineup =====
+  iphone15: { width: 1179, height: 2556 },
+  iphone15plus: { width: 1290, height: 2796 },
+  iphone15pro: { width: 1179, height: 2556 },
+  iphone15pm: { width: 1290, height: 2796 },
+
+  // ===== iPhone 14 lineup =====
+  iphone14: { width: 1170, height: 2532 },
+  iphone14plus: { width: 1284, height: 2778 },
+  iphone14pro: { width: 1179, height: 2556 },
+  iphone14pm: { width: 1290, height: 2796 },
+
+  // ===== iPhone 13 lineup =====
+  iphone13: { width: 1170, height: 2532 },
+  iphone13mini: { width: 1080, height: 2340 },
+  iphone13pro: { width: 1170, height: 2532 },
+  iphone13pm: { width: 1284, height: 2778 },
+
+  // ===== Top Android (common flagship sizes) =====
+  pixel8: { width: 1080, height: 2400 },
+  pixel8pro: { width: 1344, height: 2992 },
+
+  galaxys23: { width: 1080, height: 2340 },
+  galaxys23plus: { width: 1080, height: 2340 },
+  galaxys23ultra: { width: 1440, height: 3088 },
+
+  galaxys24: { width: 1080, height: 2340 },
+  galaxys24plus: { width: 1440, height: 3120 },
+  galaxys24ultra: { width: 1440, height: 3120 },
+
+  oneplus12: { width: 1440, height: 3168 },
+
+  // ===== fallback =====
+  default: { width: 1080, height: 1920 }
+};
 
 // ===== HELPERS =====
-function formatLabel(key, w, h) {
-  return key
-    .replace(/([a-z])([0-9])/i, '$1 $2')
-    .replace(/pm/g, ' Pro Max')
-    .replace(/pro/g, ' Pro')
-    .replace(/\b\w/g, c => c.toUpperCase()) +
-    ` (${w}x${h})`;
+function groupDates(dates) {
+  const map = {};
+  dates.forEach(d => {
+    const key = dayjs(d).format('YYYY-MM');
+    if (!map[key]) map[key] = [];
+    map[key].push(dayjs(d).date());
+  });
+  return map;
 }
 
-function groupDates(dates) {
-  const perDay = {};
-  const perMonth = {};
-
-  dates.forEach(d => {
-    const day = dayjs(d);
-    const dKey = day.format('YYYY-MM-DD');
-    const mKey = day.format('YYYY-MM');
-
-    perDay[dKey] = (perDay[dKey] || 0) + 1;
-
-    if (!perMonth[mKey]) perMonth[mKey] = [];
-    perMonth[mKey].push(day.date());
-  });
-
-  return { perDay, perMonth };
+function getNextDate(dates) {
+  const now = dayjs();
+  return dates
+    .map(d => dayjs(d))
+    .filter(d => d.isAfter(now))
+    .sort((a, b) => a - b)[0];
 }
 
 function dimColor(hex, factor = 0.4) {
   const r = parseInt(hex.substr(1, 2), 16);
   const g = parseInt(hex.substr(3, 2), 16);
   const b = parseInt(hex.substr(5, 2), 16);
-  return `rgb(${r * factor},${g * factor},${b * factor})`;
+  return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
 }
 
-function intensityColor(hex, i) {
-  return dimColor(hex, 0.3 + i * 0.7);
-}
+// ===== DRAW MONTH =====
+function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}) {
+  const {
+    showHighlighted = true,
+    showHeaders = false,
+    futureOnly = false,
+    glow = true
+  } = options;
 
-function getNextDate(dates) {
-  return dates.map(d => dayjs(d))
-    .filter(d => d.isAfter(dayjs()))
-    .sort((a,b)=>a-b)[0];
-}
+  const start = month.startOf('month');
+  const daysInMonth = month.daysInMonth();
+  const today = dayjs();
 
-// ===== CALENDAR DRAW =====
-function drawMonth(ctx, x, y, month, highlighted, color, scale) {
-  const startDay = (month.startOf('month').day() + 6) % 7;
-  const days = month.daysInMonth();
+  const startDay = (start.day() + 6) % 7;
   const cell = 40 * scale;
 
-  let col = startDay, row = 0;
+  ctx.fillStyle = '#fff';
+  ctx.font = `${28 * scale}px Sans`;
+  ctx.textAlign = 'left';
+  ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
 
-  for (let d = 1; d <= days; d++) {
+  if (showHeaders) {
+    const days = ['M','T','W','T','F','S','S'];
+    ctx.font = `${12 * scale}px Sans`;
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'center';
+
+    for (let i = 0; i < 7; i++) {
+      ctx.fillText(days[i], x + i * cell + cell / 2, y - 2);
+    }
+  }
+
+  let col = startDay;
+  let row = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
     const dx = x + col * cell;
     const dy = y + row * cell;
 
-    if (highlighted.includes(d)) {
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(dx + cell/2, dy + cell/2, 14 * scale, 0, Math.PI * 2);
-      ctx.fill();
+    const isHighlightedRaw = highlighted.includes(d);
+    const thisDate = month.date(d);
+    const isPast = thisDate.isBefore(today, 'day');
+
+    const isHighlighted =
+      showHighlighted &&
+      (futureOnly ? (isHighlightedRaw && !isPast) : isHighlightedRaw);
+
+    let fillColor = '#333';
+    let textColor = '#fff';
+
+    if (isHighlighted) {
+      if (isPast) {
+        fillColor = dimColor(color, 0.35);
+        ctx.globalAlpha = 0.6;
+      } else {
+        fillColor = color;
+        if (glow) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 20 * scale;
+        }
+      }
+    } else if (futureOnly && isHighlightedRaw && isPast) {
+      fillColor = '#222';
+      ctx.globalAlpha = 0.5;
+    } else if (isPast) {
+      fillColor = '#1a1a1a';
+      textColor = '#666';
+      ctx.globalAlpha = 0.7;
     }
 
-    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(dx + cell/2, dy + cell/2, 14 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = textColor;
+    ctx.font = `${14 * scale}px Sans`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `${14 * scale}px Sans`;
-    ctx.fillText(d, dx + cell/2, dy + cell/2);
+    ctx.fillText(d.toString(), dx + cell/2, dy + cell/2);
 
     col++;
-    if (col > 6) { col = 0; row++; }
+    if (col > 6) {
+      col = 0;
+      row++;
+    }
   }
 }
 
-// ===== HEATMAP =====
-function drawHeatmap(ctx, x, y, months, perDay, color, scale, density) {
-  const cell = 12 * scale;
-  const gap = 4 * scale;
-
-  let offsetX = x;
-
-  months.forEach(month => {
-    let col = 0;
-    let row = (month.startOf('month').day() + 6) % 7;
-
-    for (let d = 1; d <= month.daysInMonth(); d++) {
-      const key = month.date(d).format('YYYY-MM-DD');
-      const count = perDay[key] || 0;
-
-      let fill = '#1a1a1a';
-
-      if (count > 0) {
-        fill = density
-          ? intensityColor(color, Math.min(count / 5, 1))
-          : color;
-      }
-
-      ctx.fillStyle = fill;
-      ctx.fillRect(
-        offsetX + col * (cell + gap),
-        y + row * (cell + gap),
-        cell,
-        cell
-      );
-
-      col++;
-      if (col > 6) { col = 0; row++; }
-    }
-
-    offsetX += 8 * (cell + gap) + 20;
-  });
-}
-
-// ===== ROUTES =====
+// ===== API =====
 app.get('/devices', (req, res) => {
-  res.json(Object.entries(DEVICES).map(([k,v]) => ({
-    id: k,
-    width: v.width,
-    height: v.height,
-    label: formatLabel(k, v.width, v.height)
-  })));
+  const formatLabel = (key, width, height) => {
+    const pretty = key
+      // split words/numbers
+      .replace(/([a-z])([0-9])/i, '$1 $2')
+      // variants
+      .replace(/pm/g, ' Pro Max')
+      .replace(/pro/g, ' Pro')
+      .replace(/plus/g, ' Plus')
+      .replace(/mini/g, ' Mini')
+      .replace(/^Iphone/, 'iPhone')
+      .replace(/^Pixel/, 'Pixel')
+      .replace(/^Galaxys/, 'Galaxy S')
+      // capitalise words
+      .replace(/\b\w/g, c => c.toUpperCase());
+
+    return `${pretty} (${width}x${height})`;
+  };
+
+  res.json(
+    Object.entries(DEVICES).map(([key, value]) => ({
+      id: key,
+      width: value.width,
+      height: value.height,
+      label: formatLabel(key, value.width, value.height)
+    }))
+  );
 });
 
 app.post('/calendar', (req, res) => {
@@ -143,8 +204,18 @@ app.post('/calendar', (req, res) => {
     dates = [],
     color = '#ff3b30',
     device = 'default',
-    viewMode = 'calendar',
-    heatmapDensity = false
+    showHeaders = false,
+    widgetMode = false,
+
+    glowCurrentMonth = true,
+    glowSmallMonths = false,
+    glowNextEvent = true,
+
+    heightOffset = 0,
+    widthOffset = 0,
+
+    mainScaleAdjust = 1,
+    smallScaleAdjust = 1
   } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
@@ -155,49 +226,144 @@ app.post('/calendar', (req, res) => {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, width, height);
 
-  const { perDay, perMonth } = groupDates(dates);
+  const grouped = groupDates(dates);
   const now = dayjs();
 
-  if (viewMode === 'heatmap') {
-    const months = [0,1,2,3,4].map(i => now.add(i, 'month'));
+  const centerX = width / 2 + widthOffset;
 
-    drawHeatmap(
-      ctx,
-      width * 0.1,
-      height * 0.3,
-      months,
-      perDay,
-      color,
-      2,
-      heatmapDensity
-    );
+  const safeTop = height * (widgetMode ? 0.05 : 0.12);
+  const safeBottom = height * (widgetMode ? 0.05 : 0.12);
 
-  } else {
-    drawMonth(
-      ctx,
-      width / 2 - 200,
-      height * 0.25,
-      now,
-      perMonth[now.format('YYYY-MM')] || [],
-      color,
-      1.4
-    );
+  const baseLarge = widgetMode ? 1.1 : 1.4;
+  const baseSmall = widgetMode ? 0.7 : 0.8;
+
+  let largeScale = baseLarge * mainScaleAdjust;
+  let smallScale = baseSmall * smallScaleAdjust;
+
+  // ===== AUTO BALANCE =====
+  function calculateHeights(ls, ss) {
+    return {
+      large: 40 * ls * 6 + 60,
+      small: 240 * 2 * ss
+    };
   }
 
+  let sizes = calculateHeights(largeScale, smallScale);
+  let totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
+
+  const maxHeight = height - safeTop - safeBottom;
+
+  if (totalHeight > maxHeight) {
+    const ratio = maxHeight / totalHeight;
+
+    // scale both proportionally
+    largeScale *= ratio;
+    smallScale *= ratio;
+
+    sizes = calculateHeights(largeScale, smallScale);
+    totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
+  }
+
+  // ===== ADAPTIVE SPACING =====
+  const gap = Math.max(20, Math.min(60, height * 0.02));
+  const verticalGap = Math.max(20, Math.min(80, height * 0.03));
+
+  const baseY =
+    safeTop +
+    (height - safeTop - safeBottom - totalHeight) / 2;
+
+  const contentStartY = baseY + height * 0.05 + heightOffset;
+
+  // ===== LARGE =====
+  const largeWidth = 7 * 40 * largeScale;
+  const largeX = centerX - largeWidth / 2;
+  const largeY = contentStartY + 60;
+
+  drawMonth(ctx, largeX, largeY, now,
+    grouped[now.format('YYYY-MM')] || [],
+    color,
+    largeScale,
+    { showHeaders, glow: glowCurrentMonth }
+  );
+
+  // ===== SMALL =====
+  const smallWidth = 7 * 40 * smallScale;
+  const gridWidth = smallWidth * 2 + gap;
+
+  const gridStartX = centerX - gridWidth / 2;
+  const gridStartY = largeY + sizes.large + verticalGap;
+
+  for (let i = 1; i <= 4; i++) {
+    const m = now.add(i, 'month');
+    const key = m.format('YYYY-MM');
+
+    const col = (i - 1) % 2;
+    const row = Math.floor((i - 1) / 2);
+
+    const x = gridStartX + col * (smallWidth + gap);
+    const y = gridStartY + row * (200 * smallScale + verticalGap);
+
+    drawMonth(ctx, x, y, m, grouped[key] || [], color, smallScale, {
+      showHighlighted: true,
+      futureOnly: true,
+      showHeaders,
+      glow: glowSmallMonths
+    });
+  }
+
+  // ===== NEXT EVENT =====
   const next = getNextDate(dates);
+  let bottomY = gridStartY + 2 * (200 * smallScale + verticalGap);
 
   if (next) {
     let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
     if (diff === 0) diff = 1;
 
+    const textY = bottomY + 40;
+
+    if (!widgetMode) {
+      ctx.fillStyle = '#aaa';
+      ctx.font = '28px Sans';
+      ctx.textAlign = 'center';
+      ctx.fillText('NEXT EVENT', centerX, textY);
+    }
+
+    if (glowNextEvent) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+    }
+
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${diff} DAYS`, width / 2, height * 0.85);
+    ctx.fillText(`${diff} DAY${diff > 1 ? 'S' : ''}`, centerX, textY + 50);
+
+    ctx.shadowBlur = 0;
+
+    bottomY = textY + 80;
   }
+
+  // ===== BORDER =====
+  const borderPadding = 40;
+  const contentWidth = width * 0.65;
+  const borderX = (width - contentWidth) / 2 + widthOffset;
+
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = widgetMode ? 4 : 8;
+
+  ctx.beginPath();
+  ctx.roundRect(
+    borderX,
+    contentStartY - borderPadding,
+    contentWidth,
+    (bottomY - contentStartY) + borderPadding * 2,
+    40
+  );
+  ctx.stroke();
 
   res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
 });
 
-app.listen(3000, () => console.log('API running on 3000'));
+app.listen(3000, () =>
+  console.log('API running on http://localhost:3000')
+);
