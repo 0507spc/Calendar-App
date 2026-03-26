@@ -9,8 +9,45 @@ app.use(express.json());
 
 // ===== DEVICE SIZES =====
 const DEVICES = {
-  iphone16pm: { width: 1290, height: 2796 },
+  // ===== iPhone 16 lineup =====
+  iphone16: { width: 1179, height: 2556 },
+  iphone16plus: { width: 1290, height: 2796 },
+  iphone16pro: { width: 1206, height: 2622 },
+  iphone16pm: { width: 1320, height: 2868 },
+
+  // ===== iPhone 15 lineup =====
   iphone15: { width: 1179, height: 2556 },
+  iphone15plus: { width: 1290, height: 2796 },
+  iphone15pro: { width: 1179, height: 2556 },
+  iphone15pm: { width: 1290, height: 2796 },
+
+  // ===== iPhone 14 lineup =====
+  iphone14: { width: 1170, height: 2532 },
+  iphone14plus: { width: 1284, height: 2778 },
+  iphone14pro: { width: 1179, height: 2556 },
+  iphone14pm: { width: 1290, height: 2796 },
+
+  // ===== iPhone 13 lineup =====
+  iphone13: { width: 1170, height: 2532 },
+  iphone13mini: { width: 1080, height: 2340 },
+  iphone13pro: { width: 1170, height: 2532 },
+  iphone13pm: { width: 1284, height: 2778 },
+
+  // ===== Top Android (common flagship sizes) =====
+  pixel8: { width: 1080, height: 2400 },
+  pixel8pro: { width: 1344, height: 2992 },
+
+  galaxys23: { width: 1080, height: 2340 },
+  galaxys23plus: { width: 1080, height: 2340 },
+  galaxys23ultra: { width: 1440, height: 3088 },
+
+  galaxys24: { width: 1080, height: 2340 },
+  galaxys24plus: { width: 1440, height: 3120 },
+  galaxys24ultra: { width: 1440, height: 3120 },
+
+  oneplus12: { width: 1440, height: 3168 },
+
+  // ===== fallback =====
   default: { width: 1080, height: 1920 }
 };
 
