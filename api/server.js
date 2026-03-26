@@ -33,7 +33,7 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
-// ===== COLOR HELPERS =====
+// ===== COLOR =====
 function dimColor(hex, factor = 0.4) {
   const r = parseInt(hex.substr(1, 2), 16);
   const g = parseInt(hex.substr(3, 2), 16);
@@ -46,7 +46,8 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
   const {
     showHighlighted = true,
     showHeaders = false,
-    futureOnly = false
+    futureOnly = false,
+    glow = true
   } = options;
 
   const start = month.startOf('month');
@@ -92,7 +93,6 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     let fillColor = '#333';
     let textColor = '#fff';
 
-    // ===== EVENT STYLING =====
     if (isHighlighted) {
       if (isPast) {
         fillColor = dimColor(color, 0.35);
@@ -100,12 +100,12 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
       } else {
         fillColor = color;
 
-        // glow
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20 * scale;
+        if (glow) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 20 * scale;
+        }
       }
     }
-    // 👇 subtle hint for past events in small months
     else if (futureOnly && isHighlightedRaw && isPast) {
       fillColor = '#222';
       ctx.globalAlpha = 0.5;
@@ -127,7 +127,6 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     ctx.fillStyle = fillColor;
     ctx.fill();
 
-    // reset effects
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
 
@@ -136,11 +135,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    ctx.fillText(
-      d.toString(),
-      dx + cell / 2,
-      dy + cell / 2
-    );
+    ctx.fillText(d.toString(), dx + cell / 2, dy + cell / 2);
 
     col++;
     if (col > 6) {
@@ -157,7 +152,11 @@ app.post('/calendar', (req, res) => {
     color = '#ff3b30',
     device = 'default',
     showHeaders = false,
-    widgetMode = false
+    widgetMode = false,
+
+    glowCurrentMonth = true,
+    glowSmallMonths = false,
+    glowNextEvent = true
   } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
@@ -202,7 +201,7 @@ app.post('/calendar', (req, res) => {
     grouped[now.format('YYYY-MM')] || [],
     color,
     largeScale,
-    { showHeaders }
+    { showHeaders, glow: glowCurrentMonth }
   );
 
   // SMALL
@@ -234,7 +233,8 @@ app.post('/calendar', (req, res) => {
       {
         showHighlighted: true,
         futureOnly: true,
-        showHeaders
+        showHeaders,
+        glow: glowSmallMonths
       }
     );
   }
@@ -244,7 +244,11 @@ app.post('/calendar', (req, res) => {
   let bottomY = gridStartY + 2 * 240 * smallScale;
 
   if (next) {
-    const diff = next.diff(dayjs(), 'day') + 1;
+    let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
+
+    // fix "0 days"
+    if (diff === 0) diff = 1;
+
     const textY = bottomY + (widgetMode ? 40 : 80);
 
     ctx.textAlign = 'center';
@@ -255,9 +259,16 @@ app.post('/calendar', (req, res) => {
       ctx.fillText('NEXT EVENT', centerX, textY);
     }
 
+    if (glowNextEvent) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 20;
+    }
+
     ctx.fillStyle = '#fff';
     ctx.font = widgetMode ? '36px Sans' : '48px Sans';
-    ctx.fillText(`${diff} DAYS`, centerX, textY + 50);
+    ctx.fillText(`${diff} DAY${diff > 1 ? 'S' : ''}`, centerX, textY + 50);
+
+    ctx.shadowBlur = 0;
 
     bottomY = textY + 80;
   }
