@@ -33,7 +33,6 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
-// ===== COLOR =====
 function dimColor(hex, factor = 0.4) {
   const r = parseInt(hex.substr(1, 2), 16);
   const g = parseInt(hex.substr(3, 2), 16);
@@ -82,7 +81,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
 
     const isHighlightedRaw = highlighted.includes(d);
     const thisDate = month.date(d);
-    const isPast = thisDate.isBefore(today, 'day');
+    const isPast = thisDate.isBefore(dayjs(), 'day');
 
     const isHighlighted =
       showHighlighted &&
@@ -117,13 +116,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     }
 
     ctx.beginPath();
-    ctx.arc(
-      dx + cell / 2,
-      dy + cell / 2,
-      14 * scale,
-      0,
-      Math.PI * 2
-    );
+    ctx.arc(dx + cell / 2, dy + cell / 2, 14 * scale, 0, Math.PI * 2);
     ctx.fillStyle = fillColor;
     ctx.fill();
 
@@ -134,7 +127,6 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     ctx.font = `${14 * scale}px Sans`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
     ctx.fillText(d.toString(), dx + cell / 2, dy + cell / 2);
 
     col++;
@@ -159,7 +151,11 @@ app.post('/calendar', (req, res) => {
     glowNextEvent = true,
 
     heightOffset = 0,
-    widthOffset = 0
+    widthOffset = 0,
+
+    // NEW SCALE CONTROLS
+    mainScaleAdjust = 1,
+    smallScaleAdjust = 1
   } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
@@ -178,8 +174,11 @@ app.post('/calendar', (req, res) => {
   const safeTop = height * (widgetMode ? 0.05 : 0.12);
   const safeBottom = height * (widgetMode ? 0.05 : 0.12);
 
-  const largeScale = widgetMode ? 1.1 : 1.4;
-  const smallScale = widgetMode ? 0.7 : 0.8;
+  const baseLarge = widgetMode ? 1.1 : 1.4;
+  const baseSmall = widgetMode ? 0.7 : 0.8;
+
+  const largeScale = baseLarge * mainScaleAdjust;
+  const smallScale = baseSmall * smallScaleAdjust;
 
   const largeHeight = 40 * largeScale * 6 + 60;
   const smallBlockHeight = 240 * 2 * smallScale;
@@ -194,7 +193,7 @@ app.post('/calendar', (req, res) => {
 
   const contentStartY = baseY + height * 0.05 + heightOffset;
 
-  // ===== LARGE =====
+  // LARGE
   const largeWidth = 7 * 40 * largeScale;
   const largeX = centerX - largeWidth / 2;
   const largeY = contentStartY + 60;
@@ -210,7 +209,7 @@ app.post('/calendar', (req, res) => {
     { showHeaders, glow: glowCurrentMonth }
   );
 
-  // ===== SMALL =====
+  // SMALL
   const smallWidth = 7 * 40 * smallScale;
   const gap = 40;
 
@@ -228,24 +227,15 @@ app.post('/calendar', (req, res) => {
     const x = gridStartX + col * (smallWidth + gap);
     const y = gridStartY + row * 240 * smallScale;
 
-    drawMonth(
-      ctx,
-      x,
-      y,
-      m,
-      grouped[key] || [],
-      color,
-      smallScale,
-      {
-        showHighlighted: true,
-        futureOnly: true,
-        showHeaders,
-        glow: glowSmallMonths
-      }
-    );
+    drawMonth(ctx, x, y, m, grouped[key] || [], color, smallScale, {
+      showHighlighted: true,
+      futureOnly: true,
+      showHeaders,
+      glow: glowSmallMonths
+    });
   }
 
-  // ===== NEXT EVENT =====
+  // NEXT EVENT
   const next = getNextDate(dates);
   let bottomY = gridStartY + 2 * 240 * smallScale;
 
@@ -277,7 +267,7 @@ app.post('/calendar', (req, res) => {
     bottomY = textY + 80;
   }
 
-  // ===== BORDER =====
+  // BORDER
   const borderPadding = 40;
   const contentWidth = width * (widgetMode ? 0.85 : 0.65);
   const borderX = (width - contentWidth) / 2 + widthOffset;
