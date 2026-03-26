@@ -33,30 +33,23 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
+// ===== COLOR HELPERS =====
+function dimColor(hex, factor = 0.4) {
+  const r = parseInt(hex.substr(1, 2), 16);
+  const g = parseInt(hex.substr(3, 2), 16);
+  const b = parseInt(hex.substr(5, 2), 16);
+  return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
+}
+
 // ===== DRAW MONTH =====
-function drawMonth(
-  ctx,
-  x,
-  y,
-  month,
-  highlighted,
-  color,
-  scale = 1,
-  options = {}
-) {
-  const {
-    showHighlighted = true,
-    showHeaders = false
-  } = options;
+function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}) {
+  const { showHighlighted = true, showHeaders = false } = options;
 
   const start = month.startOf('month');
   const daysInMonth = month.daysInMonth();
-
   const today = dayjs();
 
-  // Monday start
-  const startDay = (start.day() + 6) % 7;
-
+  const startDay = (start.day() + 6) % 7; // Monday start
   const cell = 40 * scale;
 
   // Month title
@@ -85,26 +78,30 @@ function drawMonth(
     const dy = y + row * cell;
 
     const isHighlighted = highlighted.includes(d);
-
     const thisDate = month.date(d);
     const isPast = thisDate.isBefore(today, 'day');
+    const isFuture = thisDate.isAfter(today, 'day');
 
     let fillColor = '#333';
     let textColor = '#fff';
 
-
+    // ===== EVENT STYLING =====
     if (showHighlighted && isHighlighted) {
-  
-}
+      if (isPast) {
+        fillColor = dimColor(color, 0.35);
 
-    // •	#8b1e1e = subtle
-	  // •	#661111 = more faded
-	  // •	#aa2a2a = slightly stronger
-    if (showHighlighted && isHighlighted) {
-      fillColor = isPast ? '#8b1e1e' : color; // 👈 dim red for past events
+        ctx.globalAlpha = 0.6; // fade past
+      } else {
+        fillColor = color;
+
+        // 👇 glow for upcoming events
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20 * scale;
+      }
     } else if (isPast) {
       fillColor = '#1a1a1a';
       textColor = '#666';
+      ctx.globalAlpha = 0.7;
     }
 
     // Circle
@@ -119,7 +116,11 @@ function drawMonth(
     ctx.fillStyle = fillColor;
     ctx.fill();
 
-    // Text (centered)
+    // Reset effects
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+
+    // Text
     ctx.fillStyle = textColor;
     ctx.font = `${14 * scale}px Sans`;
     ctx.textAlign = 'center';
@@ -145,8 +146,6 @@ app.post('/calendar', (req, res) => {
     dates = [],
     color = '#ff3b30',
     device = 'default',
-
-    // NEW OPTIONS
     showHeaders = false,
     widgetMode = false,
     showSmallMonthEvents = false
@@ -165,11 +164,9 @@ app.post('/calendar', (req, res) => {
   const now = dayjs();
   const centerX = width / 2;
 
-  // ===== SAFE AREAS =====
   const safeTop = height * (widgetMode ? 0.05 : 0.12);
   const safeBottom = height * (widgetMode ? 0.05 : 0.12);
 
-  // ===== SCALES =====
   const largeScale = widgetMode ? 1.1 : 1.4;
   const smallScale = widgetMode ? 0.7 : 0.8;
 
@@ -255,20 +252,11 @@ app.post('/calendar', (req, res) => {
 
     bottomY = textY + 80;
   }
-  
+
   // ===== BORDER =====
   const borderPadding = 40;
-  const innerPadding = 20;
-  
-  const contentTop = contentStartY;
-  const contentBottom = bottomY;
-
-  // const contentWidth = width * (widgetMode ? 0.9 : 0.72);
-  const contentWidth = width * (widgetMode ? 0.85 : 0.65); // 👈 narrower
+  const contentWidth = width * (widgetMode ? 0.85 : 0.65);
   const borderX = (width - contentWidth) / 2;
-  const contentInnerX = borderX + innerPadding;
-
-  const largeX = centerX - largeWidth / 2 + innerPadding / 2;
 
   ctx.strokeStyle = '#fff';
   ctx.lineWidth = widgetMode ? 4 : 8;
@@ -276,9 +264,9 @@ app.post('/calendar', (req, res) => {
   ctx.beginPath();
   ctx.roundRect(
     borderX,
-    contentTop - borderPadding,
+    contentStartY - borderPadding,
     contentWidth,
-    (contentBottom - contentTop) + borderPadding * 2,
+    (bottomY - contentStartY) + borderPadding * 2,
     40
   );
   ctx.stroke();
