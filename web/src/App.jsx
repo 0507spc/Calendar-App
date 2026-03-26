@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API_URL = "http://localhost:23000/calendar";
+const API_URL = "https://calendar-api.server.cranie.com/calendar";
 
 export default function App() {
   const [dates, setDates] = useState("2026-03-26\n2026-03-27");
