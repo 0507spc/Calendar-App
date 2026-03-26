@@ -62,7 +62,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
   ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
 
   if (showHeaders) {
-    const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const days = ['M','T','W','T','F','S','S'];
     ctx.font = `${12 * scale}px Sans`;
     ctx.fillStyle = '#888';
     ctx.textAlign = 'center';
@@ -81,13 +81,11 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
 
     const isHighlightedRaw = highlighted.includes(d);
     const thisDate = month.date(d);
-    const isPast = thisDate.isBefore(dayjs(), 'day');
+    const isPast = thisDate.isBefore(today, 'day');
 
     const isHighlighted =
       showHighlighted &&
-      (futureOnly
-        ? (isHighlightedRaw && !isPast)
-        : isHighlightedRaw);
+      (futureOnly ? (isHighlightedRaw && !isPast) : isHighlightedRaw);
 
     let fillColor = '#333';
     let textColor = '#fff';
@@ -98,25 +96,22 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
         ctx.globalAlpha = 0.6;
       } else {
         fillColor = color;
-
         if (glow) {
           ctx.shadowColor = color;
           ctx.shadowBlur = 20 * scale;
         }
       }
-    }
-    else if (futureOnly && isHighlightedRaw && isPast) {
+    } else if (futureOnly && isHighlightedRaw && isPast) {
       fillColor = '#222';
       ctx.globalAlpha = 0.5;
-    }
-    else if (isPast) {
+    } else if (isPast) {
       fillColor = '#1a1a1a';
       textColor = '#666';
       ctx.globalAlpha = 0.7;
     }
 
     ctx.beginPath();
-    ctx.arc(dx + cell / 2, dy + cell / 2, 14 * scale, 0, Math.PI * 2);
+    ctx.arc(dx + cell/2, dy + cell/2, 14 * scale, 0, Math.PI * 2);
     ctx.fillStyle = fillColor;
     ctx.fill();
 
@@ -127,7 +122,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     ctx.font = `${14 * scale}px Sans`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(d.toString(), dx + cell / 2, dy + cell / 2);
+    ctx.fillText(d.toString(), dx + cell/2, dy + cell/2);
 
     col++;
     if (col > 6) {
@@ -153,7 +148,6 @@ app.post('/calendar', (req, res) => {
     heightOffset = 0,
     widthOffset = 0,
 
-    // NEW SCALE CONTROLS
     mainScaleAdjust = 1,
     smallScaleAdjust = 1
   } = req.body;
@@ -177,45 +171,61 @@ app.post('/calendar', (req, res) => {
   const baseLarge = widgetMode ? 1.1 : 1.4;
   const baseSmall = widgetMode ? 0.7 : 0.8;
 
-  const largeScale = baseLarge * mainScaleAdjust;
-  const smallScale = baseSmall * smallScaleAdjust;
+  let largeScale = baseLarge * mainScaleAdjust;
+  let smallScale = baseSmall * smallScaleAdjust;
 
-  const largeHeight = 40 * largeScale * 6 + 60;
-  const smallBlockHeight = 240 * 2 * smallScale;
-  const nextHeight = widgetMode ? 80 : 120;
+  // ===== AUTO BALANCE =====
+  function calculateHeights(ls, ss) {
+    return {
+      large: 40 * ls * 6 + 60,
+      small: 240 * 2 * ss
+    };
+  }
 
-  const totalContentHeight =
-    largeHeight + 40 + smallBlockHeight + 40 + nextHeight;
+  let sizes = calculateHeights(largeScale, smallScale);
+  let totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
+
+  const maxHeight = height - safeTop - safeBottom;
+
+  if (totalHeight > maxHeight) {
+    const ratio = maxHeight / totalHeight;
+
+    // scale both proportionally
+    largeScale *= ratio;
+    smallScale *= ratio;
+
+    sizes = calculateHeights(largeScale, smallScale);
+    totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
+  }
+
+  // ===== ADAPTIVE SPACING =====
+  const gap = Math.max(20, Math.min(60, height * 0.02));
+  const verticalGap = Math.max(20, Math.min(80, height * 0.03));
 
   const baseY =
     safeTop +
-    (height - safeTop - safeBottom - totalContentHeight) / 2;
+    (height - safeTop - safeBottom - totalHeight) / 2;
 
   const contentStartY = baseY + height * 0.05 + heightOffset;
 
-  // LARGE
+  // ===== LARGE =====
   const largeWidth = 7 * 40 * largeScale;
   const largeX = centerX - largeWidth / 2;
   const largeY = contentStartY + 60;
 
-  drawMonth(
-    ctx,
-    largeX,
-    largeY,
-    now,
+  drawMonth(ctx, largeX, largeY, now,
     grouped[now.format('YYYY-MM')] || [],
     color,
     largeScale,
     { showHeaders, glow: glowCurrentMonth }
   );
 
-  // SMALL
+  // ===== SMALL =====
   const smallWidth = 7 * 40 * smallScale;
-  const gap = 40;
-
   const gridWidth = smallWidth * 2 + gap;
+
   const gridStartX = centerX - gridWidth / 2;
-  const gridStartY = largeY + largeHeight;
+  const gridStartY = largeY + sizes.large + verticalGap;
 
   for (let i = 1; i <= 4; i++) {
     const m = now.add(i, 'month');
@@ -225,7 +235,7 @@ app.post('/calendar', (req, res) => {
     const row = Math.floor((i - 1) / 2);
 
     const x = gridStartX + col * (smallWidth + gap);
-    const y = gridStartY + row * 240 * smallScale;
+    const y = gridStartY + row * (200 * smallScale + verticalGap);
 
     drawMonth(ctx, x, y, m, grouped[key] || [], color, smallScale, {
       showHighlighted: true,
@@ -235,21 +245,20 @@ app.post('/calendar', (req, res) => {
     });
   }
 
-  // NEXT EVENT
+  // ===== NEXT EVENT =====
   const next = getNextDate(dates);
-  let bottomY = gridStartY + 2 * 240 * smallScale;
+  let bottomY = gridStartY + 2 * (200 * smallScale + verticalGap);
 
   if (next) {
     let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
     if (diff === 0) diff = 1;
 
-    const textY = bottomY + (widgetMode ? 40 : 80);
-
-    ctx.textAlign = 'center';
+    const textY = bottomY + 40;
 
     if (!widgetMode) {
       ctx.fillStyle = '#aaa';
       ctx.font = '28px Sans';
+      ctx.textAlign = 'center';
       ctx.fillText('NEXT EVENT', centerX, textY);
     }
 
@@ -259,7 +268,7 @@ app.post('/calendar', (req, res) => {
     }
 
     ctx.fillStyle = '#fff';
-    ctx.font = widgetMode ? '36px Sans' : '48px Sans';
+    ctx.font = '48px Sans';
     ctx.fillText(`${diff} DAY${diff > 1 ? 'S' : ''}`, centerX, textY + 50);
 
     ctx.shadowBlur = 0;
@@ -267,9 +276,9 @@ app.post('/calendar', (req, res) => {
     bottomY = textY + 80;
   }
 
-  // BORDER
+  // ===== BORDER =====
   const borderPadding = 40;
-  const contentWidth = width * (widgetMode ? 0.85 : 0.65);
+  const contentWidth = width * 0.65;
   const borderX = (width - contentWidth) / 2 + widthOffset;
 
   ctx.strokeStyle = '#fff';
