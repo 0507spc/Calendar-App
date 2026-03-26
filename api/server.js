@@ -7,59 +7,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ===== DEVICE SIZES =====
+// ===== DEVICES =====
 const DEVICES = {
-  // ===== iPhone 16 lineup =====
-  iphone16: { width: 1179, height: 2556 },
-  iphone16plus: { width: 1290, height: 2796 },
-  iphone16pro: { width: 1206, height: 2622 },
   iphone16pm: { width: 1320, height: 2868 },
-
-  // ===== iPhone 15 lineup =====
   iphone15: { width: 1179, height: 2556 },
-  iphone15plus: { width: 1290, height: 2796 },
-  iphone15pro: { width: 1179, height: 2556 },
-  iphone15pm: { width: 1290, height: 2796 },
-
-  // ===== iPhone 14 lineup =====
-  iphone14: { width: 1170, height: 2532 },
-  iphone14plus: { width: 1284, height: 2778 },
-  iphone14pro: { width: 1179, height: 2556 },
-  iphone14pm: { width: 1290, height: 2796 },
-
-  // ===== iPhone 13 lineup =====
-  iphone13: { width: 1170, height: 2532 },
-  iphone13mini: { width: 1080, height: 2340 },
-  iphone13pro: { width: 1170, height: 2532 },
-  iphone13pm: { width: 1284, height: 2778 },
-
-  // ===== Top Android (common flagship sizes) =====
-  pixel8: { width: 1080, height: 2400 },
   pixel8pro: { width: 1344, height: 2992 },
-
-  galaxys23: { width: 1080, height: 2340 },
-  galaxys23plus: { width: 1080, height: 2340 },
-  galaxys23ultra: { width: 1440, height: 3088 },
-
-  galaxys24: { width: 1080, height: 2340 },
-  galaxys24plus: { width: 1440, height: 3120 },
   galaxys24ultra: { width: 1440, height: 3120 },
-
-  oneplus12: { width: 1440, height: 3168 },
-
-  // ===== fallback =====
   default: { width: 1080, height: 1920 }
 };
 
 // ===== HELPERS =====
 function groupDates(dates) {
-  const map = {};
+  const perDay = {};
+  const perMonth = {};
+
   dates.forEach(d => {
-    const key = dayjs(d).format('YYYY-MM');
-    if (!map[key]) map[key] = [];
-    map[key].push(dayjs(d).date());
+    const dayKey = dayjs(d).format('YYYY-MM-DD');
+    const monthKey = dayjs(d).format('YYYY-MM');
+
+    perDay[dayKey] = (perDay[dayKey] || 0) + 1;
+
+    if (!perMonth[monthKey]) perMonth[monthKey] = [];
+    perMonth[monthKey].push(dayjs(d).date());
   });
-  return map;
+
+  return { perDay, perMonth };
+}
+
+function dimColor(hex, factor = 0.4) {
+  const r = parseInt(hex.substr(1, 2), 16);
+  const g = parseInt(hex.substr(3, 2), 16);
+  const b = parseInt(hex.substr(5, 2), 16);
+  return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
+}
+
+function getIntensityColor(base, intensity) {
+  const factor = 0.3 + intensity * 0.7;
+  return dimColor(base, factor);
 }
 
 function getNextDate(dates) {
@@ -70,21 +54,9 @@ function getNextDate(dates) {
     .sort((a, b) => a - b)[0];
 }
 
-function dimColor(hex, factor = 0.4) {
-  const r = parseInt(hex.substr(1, 2), 16);
-  const g = parseInt(hex.substr(3, 2), 16);
-  const b = parseInt(hex.substr(5, 2), 16);
-  return `rgb(${Math.floor(r * factor)}, ${Math.floor(g * factor)}, ${Math.floor(b * factor)})`;
-}
-
-// ===== DRAW MONTH =====
+// ===== DRAW MONTH (calendar mode) =====
 function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}) {
-  const {
-    showHighlighted = true,
-    showHeaders = false,
-    futureOnly = false,
-    glow = true
-  } = options;
+  const { showHeaders = false, glow = true } = options;
 
   const start = month.startOf('month');
   const daysInMonth = month.daysInMonth();
@@ -95,19 +67,7 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
 
   ctx.fillStyle = '#fff';
   ctx.font = `${28 * scale}px Sans`;
-  ctx.textAlign = 'left';
   ctx.fillText(month.format('MMMM').toUpperCase(), x, y - 20 * scale);
-
-  if (showHeaders) {
-    const days = ['M','T','W','T','F','S','S'];
-    ctx.font = `${12 * scale}px Sans`;
-    ctx.fillStyle = '#888';
-    ctx.textAlign = 'center';
-
-    for (let i = 0; i < 7; i++) {
-      ctx.fillText(days[i], x + i * cell + cell / 2, y - 2);
-    }
-  }
 
   let col = startDay;
   let row = 0;
@@ -116,106 +76,116 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
     const dx = x + col * cell;
     const dy = y + row * cell;
 
-    const isHighlightedRaw = highlighted.includes(d);
-    const thisDate = month.date(d);
-    const isPast = thisDate.isBefore(today, 'day');
+    const isHighlighted = highlighted.includes(d);
+    const isPast = month.date(d).isBefore(today, 'day');
 
-    const isHighlighted =
-      showHighlighted &&
-      (futureOnly ? (isHighlightedRaw && !isPast) : isHighlightedRaw);
-
-    let fillColor = '#333';
-    let textColor = '#fff';
+    let fill = '#333';
 
     if (isHighlighted) {
-      if (isPast) {
-        fillColor = dimColor(color, 0.35);
-        ctx.globalAlpha = 0.6;
-      } else {
-        fillColor = color;
-        if (glow) {
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 20 * scale;
-        }
+      fill = isPast ? dimColor(color, 0.35) : color;
+
+      if (!isPast && glow) {
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20 * scale;
       }
-    } else if (futureOnly && isHighlightedRaw && isPast) {
-      fillColor = '#222';
-      ctx.globalAlpha = 0.5;
-    } else if (isPast) {
-      fillColor = '#1a1a1a';
-      textColor = '#666';
-      ctx.globalAlpha = 0.7;
     }
 
     ctx.beginPath();
     ctx.arc(dx + cell/2, dy + cell/2, 14 * scale, 0, Math.PI * 2);
-    ctx.fillStyle = fillColor;
+    ctx.fillStyle = fill;
     ctx.fill();
 
-    ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
 
-    ctx.fillStyle = textColor;
-    ctx.font = `${14 * scale}px Sans`;
+    ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.font = `${14 * scale}px Sans`;
     ctx.fillText(d.toString(), dx + cell/2, dy + cell/2);
 
     col++;
-    if (col > 6) {
-      col = 0;
-      row++;
-    }
+    if (col > 6) { col = 0; row++; }
   }
 }
 
-// ===== API =====
+// ===== HEATMAP =====
+function drawHeatmap(ctx, x, y, months, grouped, color, scale, options = {}) {
+  const { glow = true, density = false } = options;
+
+  const today = dayjs();
+  const cell = 12 * scale;
+  const gap = 4 * scale;
+
+  let offsetX = x;
+
+  months.forEach(month => {
+    const start = month.startOf('month');
+    const daysInMonth = month.daysInMonth();
+    const startDay = (start.day() + 6) % 7;
+
+    let col = 0;
+    let row = startDay;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = month.date(d).format('YYYY-MM-DD');
+      const count = grouped[key] || 0;
+
+      const isPast = month.date(d).isBefore(today, 'day');
+
+      let fill = '#1a1a1a';
+
+      if (count > 0) {
+        if (density) {
+          fill = getIntensityColor(color, Math.min(count / 5, 1));
+        } else {
+          fill = isPast ? dimColor(color, 0.4) : color;
+        }
+
+        if (!isPast && glow) {
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 8;
+        }
+      }
+
+      ctx.fillStyle = fill;
+      ctx.fillRect(
+        offsetX + col * (cell + gap),
+        y + row * (cell + gap),
+        cell,
+        cell
+      );
+
+      ctx.shadowBlur = 0;
+
+      col++;
+      if (col > 6) { col = 0; row++; }
+    }
+
+    offsetX += 8 * (cell + gap) + 20;
+  });
+}
+
+// ===== DEVICES =====
 app.get('/devices', (req, res) => {
-  const formatLabel = (key, width, height) => {
-    const pretty = key
-      // split words/numbers
-      .replace(/([a-z])([0-9])/i, '$1 $2')
-      // variants
-      .replace(/pm/g, ' Pro Max')
-      .replace(/pro/g, ' Pro')
-      .replace(/plus/g, ' Plus')
-      .replace(/mini/g, ' Mini')
-      .replace(/^Iphone/, 'iPhone')
-      .replace(/^Pixel/, 'Pixel')
-      .replace(/^Galaxys/, 'Galaxy S')
-      // capitalise words
-      .replace(/\b\w/g, c => c.toUpperCase());
-
-    return `${pretty} (${width}x${height})`;
-  };
-
-  res.json(
-    Object.entries(DEVICES).map(([key, value]) => ({
-      id: key,
-      width: value.width,
-      height: value.height,
-      label: formatLabel(key, value.width, value.height)
-    }))
-  );
+  res.json(Object.entries(DEVICES).map(([k, v]) => ({
+    id: k,
+    width: v.width,
+    height: v.height,
+    label: `${k} (${v.width}x${v.height})`
+  })));
 });
 
+// ===== MAIN API =====
 app.post('/calendar', (req, res) => {
   const {
     dates = [],
     color = '#ff3b30',
     device = 'default',
-    showHeaders = false,
-    widgetMode = false,
 
-    glowCurrentMonth = true,
-    glowSmallMonths = false,
-    glowNextEvent = true,
+    viewMode = 'calendar',
+    heatmapDensity = false,
 
-    heightOffset = 0,
-    widthOffset = 0,
-
-    mainScaleAdjust = 1,
-    smallScaleAdjust = 1
+    glowCurrentMonth = true
   } = req.body;
 
   const { width, height } = DEVICES[device] || DEVICES.default;
@@ -226,144 +196,54 @@ app.post('/calendar', (req, res) => {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, width, height);
 
-  const grouped = groupDates(dates);
+  const { perDay, perMonth } = groupDates(dates);
   const now = dayjs();
+  const centerX = width / 2;
 
-  const centerX = width / 2 + widthOffset;
+  if (viewMode === 'heatmap') {
+    const months = [0,1,2,3,4].map(i => now.add(i, 'month'));
 
-  const safeTop = height * (widgetMode ? 0.05 : 0.12);
-  const safeBottom = height * (widgetMode ? 0.05 : 0.12);
+    const scale = 2;
+    const widthTotal = months.length * 120;
 
-  const baseLarge = widgetMode ? 1.1 : 1.4;
-  const baseSmall = widgetMode ? 0.7 : 0.8;
-
-  let largeScale = baseLarge * mainScaleAdjust;
-  let smallScale = baseSmall * smallScaleAdjust;
-
-  // ===== AUTO BALANCE =====
-  function calculateHeights(ls, ss) {
-    return {
-      large: 40 * ls * 6 + 60,
-      small: 240 * 2 * ss
-    };
+    drawHeatmap(
+      ctx,
+      centerX - widthTotal / 2,
+      height * 0.3,
+      months,
+      perDay,
+      color,
+      scale,
+      { glow: glowCurrentMonth, density: heatmapDensity }
+    );
+  } else {
+    // ===== CALENDAR MODE =====
+    drawMonth(
+      ctx,
+      centerX - 200,
+      height * 0.25,
+      now,
+      perMonth[now.format('YYYY-MM')] || [],
+      color,
+      1.4,
+      { glow: glowCurrentMonth }
+    );
   }
 
-  let sizes = calculateHeights(largeScale, smallScale);
-  let totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
-
-  const maxHeight = height - safeTop - safeBottom;
-
-  if (totalHeight > maxHeight) {
-    const ratio = maxHeight / totalHeight;
-
-    // scale both proportionally
-    largeScale *= ratio;
-    smallScale *= ratio;
-
-    sizes = calculateHeights(largeScale, smallScale);
-    totalHeight = sizes.large + 40 + sizes.small + 40 + 120;
-  }
-
-  // ===== ADAPTIVE SPACING =====
-  const gap = Math.max(20, Math.min(60, height * 0.02));
-  const verticalGap = Math.max(20, Math.min(80, height * 0.03));
-
-  const baseY =
-    safeTop +
-    (height - safeTop - safeBottom - totalHeight) / 2;
-
-  const contentStartY = baseY + height * 0.05 + heightOffset;
-
-  // ===== LARGE =====
-  const largeWidth = 7 * 40 * largeScale;
-  const largeX = centerX - largeWidth / 2;
-  const largeY = contentStartY + 60;
-
-  drawMonth(ctx, largeX, largeY, now,
-    grouped[now.format('YYYY-MM')] || [],
-    color,
-    largeScale,
-    { showHeaders, glow: glowCurrentMonth }
-  );
-
-  // ===== SMALL =====
-  const smallWidth = 7 * 40 * smallScale;
-  const gridWidth = smallWidth * 2 + gap;
-
-  const gridStartX = centerX - gridWidth / 2;
-  const gridStartY = largeY + sizes.large + verticalGap;
-
-  for (let i = 1; i <= 4; i++) {
-    const m = now.add(i, 'month');
-    const key = m.format('YYYY-MM');
-
-    const col = (i - 1) % 2;
-    const row = Math.floor((i - 1) / 2);
-
-    const x = gridStartX + col * (smallWidth + gap);
-    const y = gridStartY + row * (200 * smallScale + verticalGap);
-
-    drawMonth(ctx, x, y, m, grouped[key] || [], color, smallScale, {
-      showHighlighted: true,
-      futureOnly: true,
-      showHeaders,
-      glow: glowSmallMonths
-    });
-  }
-
-  // ===== NEXT EVENT =====
   const next = getNextDate(dates);
-  let bottomY = gridStartY + 2 * (200 * smallScale + verticalGap);
 
   if (next) {
     let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
     if (diff === 0) diff = 1;
 
-    const textY = bottomY + 40;
-
-    if (!widgetMode) {
-      ctx.fillStyle = '#aaa';
-      ctx.font = '28px Sans';
-      ctx.textAlign = 'center';
-      ctx.fillText('NEXT EVENT', centerX, textY);
-    }
-
-    if (glowNextEvent) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 20;
-    }
-
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
-    ctx.fillText(`${diff} DAY${diff > 1 ? 'S' : ''}`, centerX, textY + 50);
-
-    ctx.shadowBlur = 0;
-
-    bottomY = textY + 80;
+    ctx.textAlign = 'center';
+    ctx.fillText(`${diff} DAYS`, width / 2, height * 0.8);
   }
-
-  // ===== BORDER =====
-  const borderPadding = 40;
-  const contentWidth = width * 0.65;
-  const borderX = (width - contentWidth) / 2 + widthOffset;
-
-  ctx.strokeStyle = '#fff';
-  ctx.lineWidth = widgetMode ? 4 : 8;
-
-  ctx.beginPath();
-  ctx.roundRect(
-    borderX,
-    contentStartY - borderPadding,
-    contentWidth,
-    (bottomY - contentStartY) + borderPadding * 2,
-    40
-  );
-  ctx.stroke();
 
   res.setHeader('Content-Type', 'image/png');
   canvas.createPNGStream().pipe(res);
 });
 
-app.listen(3000, () =>
-  console.log('API running on http://localhost:3000')
-);
+app.listen(3000);
