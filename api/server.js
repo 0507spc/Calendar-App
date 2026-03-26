@@ -170,6 +170,17 @@ function drawMonth(ctx, x, y, month, highlighted, color, scale = 1, options = {}
 }
 
 // ===== API =====
+app.get('/devices', (req, res) => {
+  res.json(
+    Object.entries(DEVICES).map(([key, value]) => ({
+      id: key,
+      width: value.width,
+      height: value.height,
+      label: `${key} (${value.width}x${value.height})`
+    }))
+  );
+});
+
 app.post('/calendar', (req, res) => {
   const {
     dates = [],
