@@ -281,7 +281,7 @@ app.post('/calendar', (req, res) => {
 
   if (next) {
     let diff = next.startOf('day').diff(dayjs().startOf('day'), 'day');
-    if (diff === 0) diff = 1;
+    //if (diff === 0) diff = 1;
 
     const textY = bottomY + 40;
 
@@ -299,7 +299,8 @@ app.post('/calendar', (req, res) => {
 
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
-    ctx.fillText(`${diff} DAY${diff > 1 ? 'S' : ''}`, centerX, textY + 50);
+    const eventText = diff === 0 ? 'TODAY' : `${diff} DAY${diff > 1 ? 'S' : ''}`;
+    ctx.fillText(eventText, centerX, textY + 50);
 
     ctx.shadowBlur = 0;
 
