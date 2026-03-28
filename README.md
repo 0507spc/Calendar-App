@@ -125,6 +125,7 @@ curl -X POST http://localhost:23000/calendar \
 
 - The API uses the `canvas` package which requires native libraries (see `api/Dockerfile`). If installing `canvas` locally on Windows, make sure you have the required native build tools installed.
 - If images are blank or the server crashes, check the API logs for canvas-related errors.
+- There is a Webhook enabled on this repo
 
 ## Contributing
 
