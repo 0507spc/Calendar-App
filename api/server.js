@@ -299,7 +299,8 @@ app.post('/calendar', (req, res) => {
 
     ctx.fillStyle = '#fff';
     ctx.font = '48px Sans';
-    const eventText = diff === 0 ? 'TODAY' : `${diff} DAY${diff > 1 ? 'S' : ''}`;
+    const dayText = diff > 1 ? 'DAYS' : 'DAY';
+    const eventText = diff === 0 ? 'TODAY' : `${diff} ${dayText}`;
     ctx.fillText(eventText, centerX, textY + 50);
 
     ctx.shadowBlur = 0;
